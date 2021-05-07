@@ -1,4 +1,7 @@
 # LBS
+
+[crates.io](https://crates.io/crates/lbs) | [docs.rs](https://docs.rs/lbs)
+
 Library name stands for Lazy Binary Serialization. We call it "lazy" because it does not serizalize/deserialize struct fields initialized with default values like `0`, `0.0`, `""`, `Option::None`, empty containers and so on. This simple technique makes LBS much faster than other binary serialization libraries **when it comes to large structures**.
 
 LBS emerged from a highload project which demands very cheap deserialization of large structures (about 160 fields) where only some fields are explicitly filled and others are initialized with default values.
