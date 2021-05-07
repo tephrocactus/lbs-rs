@@ -84,8 +84,7 @@ struct SomeStruct {
     _omitted: bool,
 }
 
-#[derive(LBSWrite, LBSRead, Default)]
-#[lbs_default]
+#[derive(LBSWrite, LBSRead)]
 struct SomeOptionalStruct {
     id: String,
     done: bool,
