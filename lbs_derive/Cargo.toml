@@ -3,6 +3,13 @@ name = "lbs_derive"
 version = "0.1.0"
 authors = ["Roman Kuzmin <tephro@gmail.com>"]
 edition = "2018"
+description = "Lazy Binary Serialization (derive)"
+readme = "../README.md"
+license-file = "../LICENSE"
+homepage = "https://github.com/tephrocactus/lbs-rs"
+repository = "https://github.com/tephrocactus/lbs-rs"
+keywords = ["serialization", "encoding", "binary"]
+categories = ["encoding"]
 
 [lib]
 proc-macro = true
