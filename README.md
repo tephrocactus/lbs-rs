@@ -1,5 +1,5 @@
 # LBS
-Library name stands for "Lazy Binary Serialization". We call it "lazy" because it does not serizalize/deserialize struct fields initialized with default values like `0`, `0.0`, `""`, `Option::None`, empty containers and so on. This simple technique makes LBS much faster than other binary serialization libraries **when it comes to large structures**.
+Library name stands for Lazy Binary Serialization. We call it "lazy" because it does not serizalize/deserialize struct fields initialized with default values like `0`, `0.0`, `""`, `Option::None`, empty containers and so on. This simple technique makes LBS much faster than other binary serialization libraries **when it comes to large structures**.
 
 LBS emerged from a highload project which demands very cheap deserialization of large structures (about 160 fields) where only some fields are explicitly filled and others are initialized with default values.
 
@@ -15,13 +15,13 @@ LBS uses very simple, not self-describing format. Byte order is always little-en
 
 Every struct field or enum variant is assigned with numeric ID, either implicitly, using field/variant index, or explicitly, with `lbs` attribute. IDs are represented as u8, so maximum number of fields/variants is 255.
 
-Struct fields with default values are omited during serialization/deserialization. Field may be explicitly omited with `lbs(omit)` attribute.
+Struct fields with default values are ommited during serialization/deserialization. Field may be explicitly ommited with `lbs(omit)` attribute.
 
 During struct deserialization each field is constructed wtih `default()` method of it's type. Custom constructor may be explicitly defined with `lbs_default` attribute.
 
 Type                                          | Representation          
 --------------------------------------------- | -------------------------------
- `()`                                         | nothing
+ `()`                                         | void
  `u{8-128}`, `i{8-128}`, `f{32-64}`, `usize`  | as is
  `bool`                                       | `u8`
  `char`                                       | `u32`
