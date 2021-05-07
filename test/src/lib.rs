@@ -11,6 +11,7 @@ struct SomeStruct {
     #[lbs_default(Arc::from(""))]
     f2: Arc<str>,
     #[lbs(3)]
+    #[lbs_default(SomeEnum::One)]
     f3: SomeEnum,
     #[lbs(4)]
     f4: Option<SomeOptionalStruct>,
@@ -30,12 +31,6 @@ enum SomeEnum {
     One,
     Two,
     Three(String),
-}
-
-impl Default for SomeEnum {
-    fn default() -> Self {
-        Self::One
-    }
 }
 
 #[test]
