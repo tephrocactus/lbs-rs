@@ -1,0 +1,2 @@
+[workspace]
+members = ["lbs", "lbs_derive", "test"]
