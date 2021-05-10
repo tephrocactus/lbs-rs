@@ -224,7 +224,7 @@ fn usage() {
 }
 
 #[test]
-fn usage_multiple() {
+fn usage_batch() {
     let o1 = AnotherStruct {
         id: "1".to_string(),
         done: false,
@@ -236,14 +236,14 @@ fn usage_multiple() {
     };
 
     // Serialize multiple
-    let buf = BytesMut::new();
-    let mut w = buf.writer();
+    let batch = BytesMut::new();
+    let mut w = batch.writer();
     o1.lbs_write(&mut w).unwrap();
     o2.lbs_write(&mut w).unwrap();
 
     // Deserialize multiple
-    let buf = w.into_inner();
-    let mut r = buf.reader();
+    let batch = w.into_inner();
+    let mut r = batch.reader();
     let mut decoded = Vec::new();
 
     while r.get_ref().has_remaining() {
