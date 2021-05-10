@@ -1,6 +1,6 @@
 [package]
 name = "lbs"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Roman Kuzmin <tephro@gmail.com>"]
 edition = "2018"
 description = "Lazy Binary Serialization"
@@ -12,5 +12,9 @@ keywords = ["serialization", "encoding", "binary"]
 categories = ["encoding"]
 
 [dependencies]
-num-traits = "0.2"
-lbs_derive = { version = "0.1.0", path = "../lbs_derive" }
+lbs_derive = { version = "0.2.0", path = "../lbs_derive" }
+chrono = { version = "0.4", optional = true }
+smallvec = { version = "1.6.1", optional = true }
+
+[features]
+default = []

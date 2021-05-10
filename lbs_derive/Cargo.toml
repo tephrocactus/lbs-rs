@@ -1,6 +1,6 @@
 [package]
 name = "lbs_derive"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Roman Kuzmin <tephro@gmail.com>"]
 edition = "2018"
 description = "Lazy Binary Serialization (derive)"

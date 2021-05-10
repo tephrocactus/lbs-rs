@@ -1,5 +1,4 @@
-use std::io::Read;
-use std::{borrow::Cow, hash::Hash};
+use std::{borrow::Cow, hash::Hash, ops::Range, time::SystemTime};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     hash::BuildHasher,
@@ -7,9 +6,14 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
+use std::{
+    io::Read,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    time::Duration,
+};
 
 pub trait LBSRead: Sized {
-    fn lbs_read<R: Read>(r: &mut R) -> Result<Self>;
+    fn lbs_read<R: std::io::Read>(r: &mut R) -> std::io::Result<Self>;
 }
 
 macro_rules! impl_read_primitive {
@@ -62,8 +66,8 @@ impl LBSRead for char {
     fn lbs_read<R: Read>(r: &mut R) -> Result<Self> {
         let mut buf = [0; 4];
         r.read_exact(&mut buf)?;
-        char::from_u32(u32::from_le_bytes(buf))
-            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "failed to decode char from u32"))
+        Self::from_u32(u32::from_le_bytes(buf))
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "invalid char"))
     }
 }
 
@@ -73,12 +77,63 @@ impl LBSRead for String {
         let l = read_len(r)?;
 
         if l == 0 {
-            return Ok(String::new());
+            return Ok(Self::new());
         }
 
         let mut buf = vec![0; l];
         r.read_exact(&mut buf)?;
         Self::from_utf8(buf).map_err(|err| Error::new(ErrorKind::InvalidData, err))
+    }
+}
+
+impl LBSRead for Duration {
+    #[inline]
+    fn lbs_read<R: Read>(r: &mut R) -> Result<Self> {
+        let secs = u64::lbs_read(r)?;
+        let nanos = u32::lbs_read(r)?;
+        Ok(Self::new(secs, nanos))
+    }
+}
+
+impl LBSRead for SystemTime {
+    #[inline]
+    fn lbs_read<R: Read>(r: &mut R) -> Result<Self> {
+        Self::UNIX_EPOCH
+            .checked_add(Duration::lbs_read(r)?)
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "invalid system time"))
+    }
+}
+
+impl LBSRead for Ipv4Addr {
+    #[inline]
+    fn lbs_read<R: Read>(r: &mut R) -> Result<Self> {
+        Ok(Self::from(u32::lbs_read(r)?))
+    }
+}
+
+impl LBSRead for Ipv6Addr {
+    #[inline]
+    fn lbs_read<R: Read>(r: &mut R) -> Result<Self> {
+        Ok(Self::from(u128::lbs_read(r)?))
+    }
+}
+
+impl LBSRead for IpAddr {
+    #[inline]
+    fn lbs_read<R: Read>(r: &mut R) -> Result<Self> {
+        Ok(match bool::lbs_read(r)? {
+            true => IpAddr::V4(Ipv4Addr::lbs_read(r)?),
+            false => IpAddr::V6(Ipv6Addr::lbs_read(r)?),
+        })
+    }
+}
+
+impl<T: LBSRead + PartialOrd> LBSRead for Range<T> {
+    #[inline]
+    fn lbs_read<R: Read>(r: &mut R) -> Result<Self> {
+        let start = T::lbs_read(r)?;
+        let end = T::lbs_read(r)?;
+        Ok(Range { start, end })
     }
 }
 
@@ -244,13 +299,13 @@ impl<K: LBSRead + Ord> LBSRead for BTreeSet<K> {
 }
 
 #[inline]
-pub fn read_field_count<R: Read>(r: &mut R) -> Result<u8> {
-    u8::lbs_read(r)
+pub fn read_field_count<R: Read>(r: &mut R) -> Result<u16> {
+    u16::lbs_read(r)
 }
 
 #[inline]
-pub fn read_field_id<R: Read>(r: &mut R) -> Result<u8> {
-    u8::lbs_read(r)
+pub fn read_field_id<R: Read>(r: &mut R) -> Result<u16> {
+    u16::lbs_read(r)
 }
 
 #[inline]
@@ -259,7 +314,7 @@ pub fn read<T: LBSRead, R: Read>(r: &mut R) -> Result<T> {
 }
 
 #[inline]
-fn read_len<R: Read>(r: &mut R) -> Result<usize> {
+pub fn read_len<R: Read>(r: &mut R) -> Result<usize> {
     let mut buf = [0; 4];
     r.read_exact(&mut buf)?;
     Ok(u32::from_le_bytes(buf) as usize)
