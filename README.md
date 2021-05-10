@@ -47,7 +47,7 @@ Type                                                 | Omitted if               
 
 ## Third-party types coverage
 Obviously it's impossible for library author to cover all possible types.
-Currently, the only way to enable LSB for some unsupported third-party type is to use [New Type pattern](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types) and implement `LBSWrite` and `LBSRead` traits manually.
+Currently, the only way to enable LBS for some unsupported third-party type is to use [New Type pattern](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types) and implement `LBSWrite` and `LBSRead` traits manually.
 
 ## Safety
 No unsafe code is used.
