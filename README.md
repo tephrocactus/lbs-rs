@@ -81,6 +81,7 @@ speedy     | 620.72 ns     | 1.2825 us       | 944 bytes
 There are `LBSWrite` and `LBSRead` traits which implementations can be derived for structs and enums.
 
 ```rust
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use lbs::{LBSRead, LBSWrite};
 use std::{
     borrow::Cow,
@@ -305,4 +306,37 @@ fn usage() {
     assert_eq!(decoded.f37, false);
 }
 
+#[test]
+fn usage_multiple() {
+    let o1 = AnotherStruct {
+        id: "1".to_string(),
+        done: false,
+    };
+
+    let o2 = AnotherStruct {
+        id: "2".to_string(),
+        done: true,
+    };
+
+    // Serialize multiple
+    let buf = BytesMut::new();
+    let mut w = buf.writer();
+    o1.lbs_write(&mut w).unwrap();
+    o2.lbs_write(&mut w).unwrap();
+
+    // Deserialize multiple
+    let buf = w.into_inner();
+    let mut r = buf.reader();
+    let mut decoded = Vec::new();
+
+    while r.get_ref().has_remaining() {
+        decoded.push(AnotherStruct::lbs_read(&mut r).unwrap());
+    }
+
+    assert_eq!(decoded.len(), 2);
+    assert_eq!(decoded[0].id, o1.id);
+    assert_eq!(decoded[0].done, o1.done);
+    assert_eq!(decoded[1].id, o2.id);
+    assert_eq!(decoded[1].done, o2.done);
+}
 ```
