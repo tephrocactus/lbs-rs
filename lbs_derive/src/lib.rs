@@ -14,7 +14,7 @@ const FLAG_OMIT: &'static str = "omit";
 // Derive LBSWrite
 //
 
-#[proc_macro_derive(LBSWrite, attributes(lbs, lbs_omit_fn, lbs_write_fn))]
+#[proc_macro_derive(LBSWrite, attributes(lbs))]
 pub fn derive_lbs_write(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse the input tokens into a syntax tree
     let input = parse_macro_input!(input as DeriveInput);
@@ -55,7 +55,7 @@ pub fn derive_lbs_write(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 // Derive LBSRead
 //
 
-#[proc_macro_derive(LBSRead, attributes(lbs, lbs_default, lbs_read_fn))]
+#[proc_macro_derive(LBSRead, attributes(lbs, lbs_default))]
 pub fn derive_lbs_read(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse the input tokens into a syntax tree
     let input = parse_macro_input!(input as DeriveInput);
