@@ -40,8 +40,8 @@ Type                                                 | Omitted if               
  `Vec<T>`                                            | `is_empty()`                   | length (`u32`) + content (`[T]`)
  `HashMap<K, V>` / `BTreeMap<K, V>`                  | `is_empty()`                   | length (`u32`) + content (`[(K, V)]`)
  `HashSet<T>` / `BTreeSet<T>`                        | `is_empty()`                   | length (`u32`) + content (`[T]`)
- `chrono::DateTime` (feature `'chrono'`)           | never                          | secs (`i64`) + subsec_nanos (`u32`)
- `smallvec::SmallVec<A>` (feature `'smallvec'`)    | `is_empty()`                   | length (`u32`) + content (`[A]`)
+ `chrono::DateTime` (feature `chrono`)           | never                          | secs (`i64`) + subsec_nanos (`u32`)
+ `smallvec::SmallVec<A>` (feature `smallvec`)    | `is_empty()`                   | length (`u32`) + content (`[A]`)
  `struct`                                            | never                          | field_count (`u8`) + field IDs and values (`[(u8, T)]`)
  `enum`                                              | never                          | variant ID (`u8`) + optional value (`T`)
 
