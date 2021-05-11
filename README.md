@@ -94,6 +94,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+// IDs for most fields are assigned explicitly, using #[lbs(<id>)] attribute.
+// Other fields receive implicit IDs (member index).
 #[derive(LBSWrite, LBSRead)]
 struct SomeStruct<'a> {
     #[lbs(0)]
@@ -178,12 +180,14 @@ struct SomeStruct<'a> {
     f37: bool,
 }
 
+// Field IDs are assigned implicitly, using their index
 #[derive(LBSWrite, LBSRead, Default)]
 struct AnotherStruct {
     id: String,
     done: bool,
 }
 
+// Variant IDs are assigned implicitly, using their index
 #[derive(LBSWrite, LBSRead)]
 enum SomeEnum {
     One,
@@ -318,13 +322,13 @@ fn usage_batch() {
         done: true,
     };
 
-    // Serialize multiple
+    // Serialize batch
     let batch = BytesMut::new();
     let mut w = batch.writer();
     o1.lbs_write(&mut w).unwrap();
     o2.lbs_write(&mut w).unwrap();
 
-    // Deserialize multiple
+    // Deserialize batch
     let batch = w.into_inner();
     let mut r = batch.reader();
     let mut decoded = Vec::new();
