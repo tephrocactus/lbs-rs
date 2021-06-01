@@ -44,6 +44,7 @@ Type                                                 | Omitted if               
  `smallvec::SmallVec<T>` (feature `smallvec`)        | `is_empty()`                   | length (`u32`) + content (`[T]`)
  `struct`                                            | never                          | field_count (`u8`) + field IDs and values (`[(u8, T)]`)
  `enum`                                              | never                          | variant ID (`u8`) + optional value (`T`)
+ `ipnet::IpNet`                                      | `is_unspecified()`             | is v4 (`u8`) + `u32` or `u128`
 
 ## Third-party types coverage
 Obviously it's impossible for library author to cover all possible types.
@@ -178,6 +179,7 @@ struct SomeStruct<'a> {
     f36: SomeEnum,
     #[lbs(omit)]
     f37: bool,
+    f38: ipnet::
 }
 
 // Field IDs are assigned implicitly, using their index

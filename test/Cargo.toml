@@ -1,6 +1,6 @@
 [package]
 name = "test"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Roman Kuzmin <tephro@gmail.com>"]
 edition = "2018"
 publish = false
@@ -9,4 +9,5 @@ publish = false
 bytes = "1"
 chrono = "0.4"
 smallvec = "1.6.1"
-lbs = { path = "../lbs", features = ["chrono", "smallvec"] }
+ipnet = "2.3.0"
+lbs = { path = "../lbs", features = ["chrono", "smallvec", "ipnet"] }

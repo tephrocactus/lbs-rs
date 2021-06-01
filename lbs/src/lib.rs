@@ -10,3 +10,6 @@ mod chrono;
 
 #[cfg(feature = "smallvec")]
 mod smallvec;
+
+#[cfg(feature = "ipnet")]
+mod ipnet;

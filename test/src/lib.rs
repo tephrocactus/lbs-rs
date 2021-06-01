@@ -1,4 +1,7 @@
+#![allow(unused_imports, dead_code)]
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use ipnet::IpNet;
 use lbs::{LBSRead, LBSWrite};
 use std::{
     borrow::Cow,
@@ -95,6 +98,8 @@ struct SomeStruct<'a> {
     f36: SomeEnum,
     #[lbs(omit)]
     f37: bool,
+    f38: IpNet,
+    f39: IpNet,
 }
 
 // Field IDs are assigned implicitly, using their index
@@ -159,6 +164,8 @@ fn usage() {
         f35: AnotherStruct::default(),
         f36: SomeEnum::Three(String::from("test_enum")),
         f37: true,
+        f38: IpNet::from_str("192.168.1.0/24").unwrap(),
+        f39: IpNet::default(),
     };
 
     original.f29.insert(String::from("key1"), 1);
@@ -217,6 +224,8 @@ fn usage() {
     assert_eq!(decoded.f34, original.f34);
     assert_eq!(decoded.f35.id, original.f35.id);
     assert_eq!(decoded.f35.done, original.f35.done);
+    assert_eq!(decoded.f38, original.f38);
+    assert_eq!(decoded.f39, original.f39);
 
     if let SomeEnum::Three(s) = decoded.f36 {
         assert_eq!(s, "test_enum")
