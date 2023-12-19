@@ -1,5 +1,6 @@
 use super::{LBSRead, LBSWrite};
 use chrono::prelude::*;
+use std::io;
 use std::io::{Read, Result, Write};
 
 impl LBSWrite for DateTime<Utc> {
@@ -20,6 +21,11 @@ impl LBSRead for DateTime<Utc> {
     fn lbs_read<R: Read>(r: &mut R) -> Result<Self> {
         let secs = i64::lbs_read(r)?;
         let nsecs = u32::lbs_read(r)?;
-        Ok(Utc.timestamp(secs, nsecs))
+        Utc.timestamp_opt(secs, nsecs)
+            .single()
+            .ok_or(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid timestamp",
+            ))
     }
 }

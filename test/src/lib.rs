@@ -53,7 +53,7 @@ struct SomeStruct<'a> {
     #[lbs(16)]
     f16: Duration,
     #[lbs(17)]
-    #[lbs_default(SystemTime::now())]
+    #[lbs_default(SystemTime::UNIX_EPOCH)]
     f17: SystemTime,
     #[lbs(18)]
     #[lbs_default(Ipv4Addr::UNSPECIFIED)]

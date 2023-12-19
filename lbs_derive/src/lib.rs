@@ -1,4 +1,5 @@
 use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
 use quote::{quote, quote_spanned};
 use std::{collections::HashSet, convert::TryInto};
 use syn::{
@@ -252,7 +253,7 @@ fn gather_struct_meta(fields: &FieldsNamed) -> Vec<Meta> {
             name: f.ident.clone(),
             span: f.span(),
             omit: has_omit_attr(&f.attrs),
-            default: get_user_code(&f.attrs, ATTR_LBS_DEFAULT),
+            default: get_attr_code(&f.attrs, ATTR_LBS_DEFAULT),
             variant_fields: None,
         });
     }
@@ -282,7 +283,7 @@ fn gather_enum_meta(data: &DataEnum) -> Vec<Meta> {
             name: Some(v.ident.clone()),
             span: v.span(),
             omit: has_omit_attr(&v.attrs),
-            default: get_user_code(&v.attrs, ATTR_LBS_DEFAULT),
+            default: get_attr_code(&v.attrs, ATTR_LBS_DEFAULT),
             variant_fields: if v.fields.is_empty() {
                 None
             } else {
@@ -317,7 +318,7 @@ fn get_id(index: usize, attrs: &[Attribute], unique_ids: &mut HashSet<u16>) -> u
 
     // Try to find explicit ID defined via lbs attribute
     for attr in attrs {
-        if attr.path.is_ident(ATTR_LBS) {
+        if attr.path().is_ident(ATTR_LBS) {
             if let Ok(ident) = attr.parse_args::<syn::LitInt>() {
                 id = Some(ident.base10_parse().unwrap());
                 break;
@@ -340,18 +341,20 @@ fn get_id(index: usize, attrs: &[Attribute], unique_ids: &mut HashSet<u16>) -> u
     id
 }
 
-fn get_user_code(attrs: &Vec<Attribute>, needle: &str) -> Option<TokenStream> {
+fn get_attr_code(attrs: &[Attribute], attr_name: &str) -> Option<TokenStream> {
     for attr in attrs {
-        if attr.path.is_ident(needle) {
-            return Some(attr.tokens.clone());
+        if attr.path().is_ident(attr_name) {
+            if let Ok(expr) = attr.parse_args::<syn::Expr>() {
+                return Some(expr.to_token_stream());
+            }
         }
     }
     None
 }
 
-fn has_omit_attr(attrs: &Vec<Attribute>) -> bool {
+fn has_omit_attr(attrs: &[Attribute]) -> bool {
     for attr in attrs {
-        if attr.path.is_ident(ATTR_LBS) {
+        if attr.path().is_ident(ATTR_LBS) {
             if let Ok(ident) = attr.parse_args::<syn::Ident>() {
                 return ident.eq(FLAG_OMIT);
             }
