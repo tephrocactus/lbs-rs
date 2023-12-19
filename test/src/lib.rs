@@ -1,18 +1,26 @@
 #![allow(unused_imports, dead_code)]
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::Buf;
+use bytes::BufMut;
+use bytes::Bytes;
+use bytes::BytesMut;
 use ipnet::IpNet;
-use lbs::{LBSRead, LBSWrite};
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    ops::Range,
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use lbs::LBSRead;
+use lbs::LBSWrite;
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
+use std::ops::Range;
+use std::rc::Rc;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
 
 // IDs for most fields are assigned explicitly, using #[lbs(<id>)] attribute.
 // Other fields receive implicit IDs (member index).
@@ -105,7 +113,9 @@ struct SomeStruct<'a> {
 // Field IDs are assigned implicitly, using their index
 #[derive(LBSWrite, LBSRead, Default)]
 struct AnotherStruct {
+    #[lbs(id(0), required)]
     id: String,
+    #[lbs(id(1), default(true))]
     done: bool,
 }
 

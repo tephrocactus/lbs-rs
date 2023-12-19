@@ -1,19 +1,187 @@
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::Span;
+use proc_macro2::TokenStream;
+use quote::quote;
+use quote::quote_spanned;
 use quote::ToTokens;
-use quote::{quote, quote_spanned};
-use std::{collections::HashSet, convert::TryInto};
-use syn::{
-    parse_macro_input, parse_quote, spanned::Spanned, Attribute, Data, DataEnum, DeriveInput,
-    Fields, FieldsNamed, GenericParam, Generics,
-};
-
-const ATTR_LBS: &'static str = "lbs";
-const ATTR_LBS_DEFAULT: &'static str = "lbs_default";
-const FLAG_OMIT: &'static str = "omit";
+use std::collections::HashSet;
+use syn::parenthesized;
+use syn::parse::ParseBuffer;
+use syn::parse_macro_input;
+use syn::parse_quote;
+use syn::spanned::Spanned;
+use syn::Data;
+use syn::DataEnum;
+use syn::DeriveInput;
+use syn::Expr;
+use syn::Field;
+use syn::Fields;
+use syn::FieldsNamed;
+use syn::GenericParam;
+use syn::Generics;
+use syn::LitInt;
+use syn::Token;
+use syn::Variant;
 
 //
-// Derive LBSWrite
+// Constants.
 //
+
+const ATTRIBUTE: &str = "lbs";
+const ARGUMENT_ID: &str = "id";
+const ARGUMENT_DEFAULT: &str = "default";
+const ARGUMENT_REQUIRED: &str = "required";
+const ARGUMENT_SKIP: &str = "skip";
+
+//
+// Types.
+//
+
+struct Meta {
+    id: Option<u16>,
+    name: Option<syn::Ident>,
+    default: Option<TokenStream>,
+    variant_fields: Option<Fields>,
+    required: bool,
+    skip: bool,
+    span: Span,
+}
+
+//
+// Implementations.
+//
+
+impl Meta {
+    fn from_struct_field(field: &Field) -> Self {
+        let mut meta = Meta {
+            id: None,
+            name: field.ident.clone(),
+            span: field.span(),
+            required: false,
+            skip: false,
+            default: None,
+            variant_fields: None,
+        };
+
+        field
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident(ATTRIBUTE))
+            .map(|attr| {
+                attr.parse_nested_meta(|arg| {
+                    let arg_name = arg.path.get_ident().unwrap().to_string();
+
+                    match arg_name.as_str() {
+                        ARGUMENT_ID => {
+                            let content;
+                            parenthesized!(content in arg.input);
+                            meta.id = Some(Self::parse_id(content));
+                        }
+                        ARGUMENT_DEFAULT => {
+                            let content;
+                            parenthesized!(content in arg.input);
+                            meta.default = Some(Self::parse_default(content));
+                        }
+                        ARGUMENT_REQUIRED => meta.required = Self::parse_flag(arg.input, ARGUMENT_REQUIRED),
+                        ARGUMENT_SKIP => meta.skip = Self::parse_flag(arg.input, ARGUMENT_SKIP),
+                        unknown => panic_unknown_argument(unknown),
+                    }
+
+                    Ok(())
+                })
+            });
+
+        meta.validated()
+    }
+
+    fn from_enum_variant(variant: &Variant) -> Self {
+        let mut meta = Meta {
+            id: None,
+            name: Some(variant.ident.clone()),
+            span: variant.span(),
+            required: false,
+            skip: false,
+            default: None,
+            variant_fields: if variant.fields.is_empty() {
+                None
+            } else {
+                Some(variant.fields.clone())
+            },
+        };
+
+        variant
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident(ATTRIBUTE))
+            .map(|attr| {
+                attr.parse_nested_meta(|arg| {
+                    let arg_name = arg.path.get_ident().unwrap().to_string();
+
+                    match arg_name.as_str() {
+                        ARGUMENT_ID => {
+                            let content;
+                            parenthesized!(content in arg.input);
+                            meta.id = Some(Self::parse_id(content));
+                        }
+                        unknown => panic_unknown_argument(unknown),
+                    }
+
+                    Ok(())
+                })
+            });
+
+        meta.validated()
+    }
+
+    fn parse_id(input: ParseBuffer) -> u16 {
+        input
+            .parse::<LitInt>()
+            .expect("id must be numeric")
+            .base10_parse()
+            .expect("id must fit into u16")
+    }
+
+    fn parse_default(input: ParseBuffer) -> TokenStream {
+        input
+            .parse::<Expr>()
+            .expect("default expression expected")
+            .into_token_stream()
+    }
+
+    fn parse_flag(input: &ParseBuffer, arg_name: &str) -> bool {
+        if input.is_empty() || input.peek(Token![,]) {
+            return true;
+        }
+
+        panic!("argument '{}' cannot have value", arg_name)
+    }
+
+    fn validated(self) -> Self {
+        if self.id.is_none() {
+            panic!(
+                "struct field or enum variant must have an id: #[{}({}(<u16>))]",
+                ATTRIBUTE, ARGUMENT_ID
+            )
+        }
+
+        if self.required {
+            if self.default.is_some() {
+                panic!("required field cannot have 'default' argument");
+            }
+
+            if self.skip {
+                panic!("required field cannot have 'skip' argument");
+            }
+        }
+
+        self
+    }
+}
+
+//
+// Derive LBSWrite.
+//
+
+struct Tt(u32, u32);
 
 #[proc_macro_derive(LBSWrite, attributes(lbs))]
 pub fn derive_lbs_write(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -27,13 +195,13 @@ pub fn derive_lbs_write(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 
     // Generate lbs_write() body
     let write_body = match input.data {
+        Data::Enum(ref data) => generate_write_body_for_enum(data),
+        Data::Union(_) => panic!("unions are unsupported yet"),
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => generate_write_body_for_struct(fields),
-            Fields::Unnamed(_) => unimplemented!(),
+            Fields::Unnamed(_) => panic!("structs with unnamed fields are unsupported yet"),
             Fields::Unit => quote!(Ok(())),
         },
-        Data::Enum(ref data) => generate_write_body_for_enum(data),
-        Data::Union(_) => unimplemented!(),
     };
 
     // Complete trait implementation
@@ -53,7 +221,7 @@ pub fn derive_lbs_write(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 }
 
 //
-// Derive LBSRead
+// Derive LBSRead.
 //
 
 #[proc_macro_derive(LBSRead, attributes(lbs, lbs_default))]
@@ -93,7 +261,7 @@ fn generate_write_body_for_struct(fields: &FieldsNamed) -> TokenStream {
     let meta = gather_struct_meta(fields);
 
     // Field count expressions
-    let field_count_expressions = meta.iter().filter(|m| !m.omit).map(|m| {
+    let field_count_expressions = meta.iter().filter(|m| !m.skip).map(|m| {
         let field_name = &m.name;
         quote_spanned! {m.span=>
             if !self.#field_name.lbs_is_default() {
@@ -103,7 +271,7 @@ fn generate_write_body_for_struct(fields: &FieldsNamed) -> TokenStream {
     });
 
     // Write expressions
-    let write_expressions = meta.iter().filter(|m| !m.omit).map(|m| {
+    let write_expressions = meta.iter().filter(|m| !m.skip).map(|m| {
         let field_id = m.id;
         let field_name = &m.name;
         quote_spanned! {m.span=>
@@ -180,7 +348,7 @@ fn generate_read_body_for_struct(fields: &FieldsNamed) -> TokenStream {
     });
 
     // Read expressions
-    let read_expressions = meta.iter().filter(|f| !f.omit).map(|f| {
+    let read_expressions = meta.iter().filter(|f| !f.skip).map(|f| {
         let field_id = f.id;
         let field_name = &f.name;
         quote_spanned! {f.span=>
@@ -234,28 +402,19 @@ fn generate_read_body_for_enum(data: &DataEnum) -> TokenStream {
     }
 }
 
-struct Meta {
-    id: u16,
-    name: Option<syn::Ident>,
-    span: Span,
-    omit: bool,
-    default: Option<TokenStream>,
-    variant_fields: Option<Fields>,
-}
-
 fn gather_struct_meta(fields: &FieldsNamed) -> Vec<Meta> {
     let mut metas = Vec::new();
     let mut unique_ids = HashSet::new();
 
-    for (i, f) in fields.named.iter().enumerate() {
-        metas.push(Meta {
-            id: get_id(i, &f.attrs, &mut unique_ids),
-            name: f.ident.clone(),
-            span: f.span(),
-            omit: has_omit_attr(&f.attrs),
-            default: get_attr_code(&f.attrs, ATTR_LBS_DEFAULT),
-            variant_fields: None,
-        });
+    for field in &fields.named {
+        let meta = Meta::from_struct_field(field);
+        let id = meta.id.unwrap();
+
+        if !unique_ids.insert(id) {
+            panic_duplicated_id(id);
+        }
+
+        metas.push(meta);
     }
 
     metas
@@ -265,31 +424,25 @@ fn gather_enum_meta(data: &DataEnum) -> Vec<Meta> {
     let mut metas = Vec::new();
     let mut unique_ids = HashSet::new();
 
-    let panic_msg = "currently, only enums with single unnamed field are supported";
-
-    for (i, v) in data.variants.iter().enumerate() {
-        if v.fields.len() > 1 {
-            panic!("{}", panic_msg);
+    for variant in &data.variants {
+        if variant.fields.len() > 1 {
+            panic!("unsupported enum variant");
         }
 
-        match v.fields {
+        match variant.fields {
             Fields::Unit => {}
             Fields::Unnamed(_) => {}
-            _ => panic!("{}", panic_msg),
+            _ => panic!("unsupported enum variant"),
         }
 
-        metas.push(Meta {
-            id: get_id(i, &v.attrs, &mut unique_ids),
-            name: Some(v.ident.clone()),
-            span: v.span(),
-            omit: has_omit_attr(&v.attrs),
-            default: get_attr_code(&v.attrs, ATTR_LBS_DEFAULT),
-            variant_fields: if v.fields.is_empty() {
-                None
-            } else {
-                Some(v.fields.clone())
-            },
-        });
+        let meta = Meta::from_enum_variant(variant);
+        let id = meta.id.unwrap();
+
+        if !unique_ids.insert(id) {
+            panic_duplicated_id(id);
+        }
+
+        metas.push(meta);
     }
 
     metas
@@ -313,52 +466,10 @@ fn add_read_trait_bound(mut generics: Generics) -> Generics {
     generics
 }
 
-fn get_id(index: usize, attrs: &[Attribute], unique_ids: &mut HashSet<u16>) -> u16 {
-    let mut id: Option<u16> = None;
-
-    // Try to find explicit ID defined via lbs attribute
-    for attr in attrs {
-        if attr.path().is_ident(ATTR_LBS) {
-            if let Ok(ident) = attr.parse_args::<syn::LitInt>() {
-                id = Some(ident.base10_parse().unwrap());
-                break;
-            }
-        }
-    }
-
-    // If explicit ID wasn't found - use member index
-    let id = if id.is_none() {
-        index.try_into().unwrap()
-    } else {
-        id.unwrap()
-    };
-
-    // Ensure ID is unique
-    if !unique_ids.insert(id) {
-        panic!("duplicate id: {}", id);
-    }
-
-    id
+fn panic_duplicated_id(id: u16) {
+    panic!("duplicated id {}", id);
 }
 
-fn get_attr_code(attrs: &[Attribute], attr_name: &str) -> Option<TokenStream> {
-    for attr in attrs {
-        if attr.path().is_ident(attr_name) {
-            if let Ok(expr) = attr.parse_args::<syn::Expr>() {
-                return Some(expr.to_token_stream());
-            }
-        }
-    }
-    None
-}
-
-fn has_omit_attr(attrs: &[Attribute]) -> bool {
-    for attr in attrs {
-        if attr.path().is_ident(ATTR_LBS) {
-            if let Ok(ident) = attr.parse_args::<syn::Ident>() {
-                return ident.eq(FLAG_OMIT);
-            }
-        }
-    }
-    false
+fn panic_unknown_argument(name: &str) {
+    panic!("unknown argument '{}'", name)
 }
