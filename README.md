@@ -6,13 +6,6 @@ Library name stands for Lazy Binary Serialization. We call it "lazy" because it 
 
 LBS emerged from a highload project which demands very cheap deserialization of large structures (about 160 fields) where only some fields are explicitly filled and others are initialized with default values.
 
-## Why no serde?
-[Serde](https://github.com/serde-rs/serde) is great and convenient framework, but, being an additional layer between user's and serialization library's code, it incurs substantial performance penalty. Moreover, serde 1.0.125 still does not allow to use numeric values as field names (or identifiers) which is another performance penalty if we only want to serialize some fields and omit others.
-
-## Why not just use other libraries without serde?
-Indeed, there are some binary serialization libraries out there which do not require serde. Good examples are [speedy](https://github.com/koute/speedy) and [borsh](https://github.com/near/borsh-rs), but, unfortunately, they do not support conditional serialization - every field must be serialized/deserialized. There is also [msgpack-rust](https://github.com/3Hren/msgpack-rust) (rmp) which does support conditional serialization as maps, but it is still not fast enough for our use case.
-
-
 ## Format specification
 LBS uses very simple, not self-describing format. Byte order is always little-endian.
 

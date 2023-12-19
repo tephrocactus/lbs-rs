@@ -12,7 +12,7 @@ keywords = ["serialization", "encoding", "binary"]
 categories = ["encoding"]
 
 [dependencies]
-lbs_derive = { path = "../lbs_derive" }
+lbs_derive = { version = "0.3.1", path = "../lbs_derive" }
 chrono = { version = "0.4", optional = true }
 smallvec = { version = "1.11", optional = true }
 ipnet = { version = "2.3", optional = true }
