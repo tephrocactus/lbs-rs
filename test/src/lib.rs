@@ -81,7 +81,7 @@ struct StructOne<'a> {
     #[lbs(id(25))]
     f25: Range<u64>,
     #[lbs(id(26))]
-    f26: Box<Vec<u64>>,
+    f26: Vec<u64>,
     #[lbs(id(27))]
     f27: Rc<String>,
     #[lbs(id(28))]
@@ -132,8 +132,9 @@ struct StructTwo {
 }
 
 // Variant IDs are assigned implicitly, using their index
-#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
+#[derive(LBSWrite, LBSRead, PartialEq, Debug, Default)]
 enum EnumOne {
+    #[default]
     #[lbs(id(0))]
     One,
     #[lbs(id(1))]
@@ -142,12 +143,6 @@ enum EnumOne {
     Three(String),
     #[lbs(id(3))]
     Four(EnumTwo),
-}
-
-impl Default for EnumOne {
-    fn default() -> Self {
-        EnumOne::One
-    }
 }
 
 #[derive(LBSWrite, LBSRead, PartialEq, Debug)]
@@ -205,7 +200,7 @@ fn usage() {
         f23: Ipv6Addr::from_str("2001:0db8:85a3:0000:0000:8a2e:0370:7334").unwrap(),
         f24: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
         f25: Range { start: 0, end: 1 },
-        f26: Box::new(vec![1, 2, 3]),
+        f26: vec![1, 2, 3],
         f27: Rc::new(String::from("test_rc")),
         f28: Arc::new(String::from("test_arc")),
         f29: Arc::from("test_str_arc"),

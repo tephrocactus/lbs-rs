@@ -2,262 +2,262 @@
 
 [crates.io](https://crates.io/crates/lbs) | [docs.rs](https://docs.rs/lbs)
 
-Library name stands for Lazy Binary Serialization. We call it "lazy" because it does not serizalize/deserialize struct fields initialized with default values like `0`, `0.0`, `""`, `Option::None`, empty containers and so on. This simple technique makes LBS much faster than other binary serialization libraries **when it comes to large structures**.
-
-LBS emerged from a highload project which demands very cheap deserialization of large structures (about 160 fields) where only some fields are explicitly filled and others are initialized with default values.
-
-## Format specification
-LBS uses very simple, not self-describing format. Byte order is always little-endian.
-
-Every struct field or enum variant is assigned with numeric ID (u16), either implicitly, using field/variant index, or explicitly, with `lbs` attribute.
-
-Struct fields with default values are omitted during serialization/deserialization. Field may be explicitly ommited with `lbs(omit)` attribute.
-
-During struct deserialization each field is initialized with `default()` method of it's type. Custom constructor may be explicitly defined with `lbs_default` attribute.
-
-Type                                                 | Omitted if                     | Representation          
----------------------------------------------------- | ------------------------------ | -------------------------------
- `()`                                                | always                         | void                            
- `u{8-128}`, `i{8-128}`, `f{32-64}`, `usize`         | `0`                            | as is
- `bool`                                              | `false`                        | `u8`
- `char`                                              | `'\0'`                         | `u32`
- `String` / `str`                                    | `is_empty()`                   | length (`u32`) + content (`[u8]`)
- `std::time::Duration`                               | `as_nanos() == 0`              | secs (`u64`) + subsec_nanos (`u32`)
- `std::time::SystemTime`                             | never                          | as `Duration` since `UNIX_EPOCH`
- `std::net::ip::Ipv4Addr`                            | `is_unspecified()`             | `u32`
- `std::net::ip::Ipv6Addr`                            | `is_unspecified()`             | `u128`
- `std::net::ip::IpAddr`                              | `is_unspecified()`             | is v4 (`u8`) + `u32` or `u128`
- `std::ops::Range<T>`                                | `is_empty()`                   | start (`T`) + end (`T`)
- `Option<T>`                                         | `is_none()`                    | `0u8` or (`1u8`, `T`)
- `Box<T>` / `Rc<T>` / `Arc<T>` / `Cow<'a, T>`        | T is omitted                   | `T`
- `Vec<T>`                                            | `is_empty()`                   | length (`u32`) + content (`[T]`)
- `HashMap<K, V>` / `BTreeMap<K, V>`                  | `is_empty()`                   | length (`u32`) + content (`[(K, V)]`)
- `HashSet<T>` / `BTreeSet<T>`                        | `is_empty()`                   | length (`u32`) + content (`[T]`)
- `chrono::DateTime` (feature `chrono`)               | never                          | secs (`i64`) + subsec_nanos (`u32`)
- `smallvec::SmallVec<T>` (feature `smallvec`)        | `is_empty()`                   | length (`u32`) + content (`[T]`)
- `struct`                                            | never                          | field_count (`u8`) + field IDs and values (`[(u8, T)]`)
- `enum`                                              | never                          | variant ID (`u8`) + optional value (`T`)
- `ipnet::IpNet`                                      | `is_unspecified()`             | is v4 (`u8`) + `u32` or `u128`
-
-## Third-party types coverage
-Obviously it's impossible for library author to cover all possible types.
-Currently, the only way to enable LBS for some unsupported third-party type is to use [New Type pattern](https://doc.rust-lang.org/book/ch19-03-advanced-traits.html#using-the-newtype-pattern-to-implement-external-traits-on-external-types) and implement `LBSWrite` and `LBSRead` traits manually.
+Library name stands for Lazy Binary Serialization. We call it lazy because it does not serizalize/deserialize struct fields of type `Option<T>` when value is `None`. **When it comes to large structures with significant amount of optional fields** this simple technique makes LBS faster than other libraries, where `None` values must be somehow represented on wire anyway. 
 
 ## Safety
-No unsafe code is used.
+No unsafe code.
 
 ## Status
-Format or API changes may be introduced until v1.0.0.
-
-## Minimal Rust Version
-[1.52.1](https://blog.rust-lang.org/2021/05/10/Rust-1.52.1.html)
-
-## Benchmark results
-
-**Disclaimer**. Never trust third-party benchmarks. Always make your own measurements using your specific data/workload/configuration/hardware.
-
-**Hardware**: 2,6 GHz 6-Core Intel Core i7 (12 vCPU), 16 GB 2667 MHz DDR4
-
-**OS**: MacOS Big Sur
-
-**Allocator**: mimalloc, without encryption
-
-**Data**: struct with 160 fields, mostly strings. Only 20 fields are initialized with non-default values. Other fields (with default values) are ommited by serde_json, rmp_serde and LBS (speedy does not allow this).
-
-Library    | Serialization | Deserialization | Size when serialized
----------- | ------------- | --------------- | ---------------------------
-serde_json | 823.87 ns     | 2.9540 us       | 606 bytes
-rmp_serde  | 550.54 ns     | 2.3190 us       | 522 bytes
-speedy     | 620.72 ns     | 1.2825 us       | 944 bytes
-**LBS**    | **242.62 ns** | **683.75 ns**   | **307 bytes** 
+API or format changes may be introduced until v1.0.0.
 
 ## Usage
-There are `LBSWrite` and `LBSRead` traits which implementations can be derived for structs and enums.
+1. There are `LBSWrite` and `LBSRead` traits which implementations can be derived for structs and enums.
+2. Each field or variant must have an attribute `#[lbs(id(<u16>))]`. This allows to change order of fields anytime and makes serialization cheaper.
+3. If field is of type `Option<T>` and it's value is `None`, it is not serialized/deserialized, at all. Otherwise such a field is required unless it has explicit `#[lbs(default(<expr>))]` attribute.
+4. Each struct field's type must implement `Default` or such a field must have an attribute `#[lbs(default(<expr>))]`. Even if field is required. This is because we don't want to use unsafe Rust to initialize structures. For now.
+5. Struct field may be ignored using `#[lbs(skip)]` attribute.
+6. Attributes may be concatenated like this: `#[lbs(id(<u16>), default(<expr>), skip)]`.
 
 ```rust
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use lbs::{LBSRead, LBSWrite};
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    ops::Range,
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+#![allow(unused_imports, dead_code)]
 
-// IDs for most fields are assigned explicitly, using #[lbs(<id>)] attribute.
-// Other fields receive implicit IDs (member index).
+use bytes::Buf;
+use bytes::BufMut;
+use bytes::Bytes;
+use bytes::BytesMut;
+use chrono::NaiveDate;
+use ipnet::IpNet;
+use lbs::error::LBSError;
+use lbs::LBSRead;
+use lbs::LBSWrite;
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
+use std::ops::Range;
+use std::rc::Rc;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
+use time::OffsetDateTime;
+use uuid::Uuid;
+
 #[derive(LBSWrite, LBSRead)]
-struct SomeStruct<'a> {
-    #[lbs(0)]
+struct StructOne<'a> {
+    #[lbs(id(0))]
     f0: u8,
-    #[lbs(1)]
+    #[lbs(id(1))]
     f1: u16,
-    #[lbs(2)]
+    #[lbs(id(2))]
     f2: u32,
-    #[lbs(3)]
+    #[lbs(id(3))]
     f3: u64,
-    #[lbs(4)]
+    #[lbs(id(4))]
     f4: usize,
-    #[lbs(5)]
+    #[lbs(id(5))]
     f5: u128,
-    #[lbs(6)]
+    #[lbs(id(6))]
     f6: i8,
-    #[lbs(7)]
+    #[lbs(id(7))]
     f7: i16,
-    #[lbs(8)]
+    #[lbs(id(8))]
     f8: i32,
-    #[lbs(9)]
+    #[lbs(id(9))]
     f9: i64,
-    #[lbs(10)]
-    f10: f32,
-    #[lbs(11)]
-    f11: f64,
-    #[lbs(12)]
-    f12: (),
-    #[lbs(13)]
-    f13: bool,
-    #[lbs(14)]
-    f14: char,
-    #[lbs(15)]
-    f15: String,
-    #[lbs(16)]
-    f16: Duration,
-    #[lbs(17)]
-    #[lbs_default(SystemTime::now())]
-    f17: SystemTime,
-    #[lbs(18)]
-    #[lbs_default(Ipv4Addr::UNSPECIFIED)]
-    f18: Ipv4Addr,
-    #[lbs(19)]
-    #[lbs_default(Ipv6Addr::UNSPECIFIED)]
-    f19: Ipv6Addr,
-    #[lbs(20)]
-    #[lbs_default(IpAddr::V4(Ipv4Addr::UNSPECIFIED))]
-    f20: IpAddr,
-    #[lbs(21)]
-    #[lbs_default(Range{start:0, end:0})]
-    f21: Range<u64>,
-    #[lbs(22)]
-    f22: Box<Vec<u64>>,
-    #[lbs(23)]
-    f23: Rc<String>,
-    #[lbs(24)]
-    f24: Arc<String>,
-    #[lbs(25)]
-    #[lbs_default(Arc::from(""))]
-    f25: Arc<str>,
-    #[lbs(26)]
-    f26: Cow<'a, str>,
-    #[lbs(27)]
-    f27: Option<SystemTime>,
-    #[lbs(28)]
-    f28: Vec<String>,
-    #[lbs(29)]
-    f29: HashMap<String, u64>,
-    #[lbs(30)]
-    f30: BTreeMap<u64, String>,
-    #[lbs(31)]
-    f31: HashSet<String>,
-    #[lbs(32)]
-    f32: BTreeSet<u64>,
-    #[lbs_default(chrono::Utc::now())]
-    f33: chrono::DateTime<chrono::Utc>,
-    f34: smallvec::SmallVec<[i64; 4]>,
-    f35: AnotherStruct,
-    #[lbs_default(SomeEnum::One)]
-    f36: SomeEnum,
-    #[lbs(omit)]
-    f37: bool,
-    f38: ipnet::
+    #[lbs(id(10))]
+    f10: isize,
+    #[lbs(id(11))]
+    f11: i128,
+    #[lbs(id(12))]
+    f12: f32,
+    #[lbs(id(13))]
+    f13: f64,
+    #[lbs(id(14))]
+    f14: (),
+    #[lbs(id(15))]
+    f15: (u64, String),
+    #[lbs(id(16))]
+    f16: (u64, u64, u64),
+    #[lbs(id(17))]
+    f17: bool,
+    #[lbs(id(18))]
+    f18: char,
+    #[lbs(id(19))]
+    f19: String,
+    #[lbs(id(20))]
+    f20: Duration,
+    #[lbs(id(21), default(SystemTime::UNIX_EPOCH))]
+    f21: SystemTime,
+    #[lbs(id(22), default(Ipv4Addr::UNSPECIFIED))]
+    f22: Ipv4Addr,
+    #[lbs(id(23), default(Ipv6Addr::UNSPECIFIED))]
+    f23: Ipv6Addr,
+    #[lbs(id(24), default(IpAddr::V4(Ipv4Addr::UNSPECIFIED)))]
+    f24: IpAddr,
+    #[lbs(id(25))]
+    f25: Range<u64>,
+    #[lbs(id(26))]
+    f26: Vec<u64>,
+    #[lbs(id(27))]
+    f27: Rc<String>,
+    #[lbs(id(28))]
+    f28: Arc<String>,
+    #[lbs(id(29), default(Arc::from("")))]
+    f29: Arc<str>,
+    #[lbs(id(30))]
+    f30: Cow<'a, str>,
+    #[lbs(id(31))]
+    f31: Option<String>,
+    #[lbs(id(32))]
+    f32: Vec<String>,
+    #[lbs(id(33))]
+    f33: HashMap<String, u64>,
+    #[lbs(id(34))]
+    f34: BTreeMap<u64, String>,
+    #[lbs(id(35))]
+    f35: HashSet<String>,
+    #[lbs(id(36))]
+    f36: BTreeSet<u64>,
+    #[lbs(id(37))]
+    f37: chrono::DateTime<chrono::Utc>,
+    #[lbs(id(38))]
+    f38: smallvec::SmallVec<[i64; 4]>,
+    #[lbs(id(39))]
+    f39: StructTwo,
+    #[lbs(id(40))]
+    f40: EnumOne,
+    #[lbs(id(41))]
+    f41: IpNet,
+    #[lbs(id(42))]
+    f42: Uuid,
+    #[lbs(id(43), default(OffsetDateTime::UNIX_EPOCH))]
+    f43: OffsetDateTime,
+    #[lbs(id(44), skip)]
+    f44: bool,
 }
 
 // Field IDs are assigned implicitly, using their index
-#[derive(LBSWrite, LBSRead, Default)]
-struct AnotherStruct {
-    id: String,
-    done: bool,
+#[derive(LBSWrite, LBSRead, Default, PartialEq, Debug)]
+struct StructTwo {
+    #[lbs(id(0))]
+    id: Uuid,
+    #[lbs(id(1))]
+    name: String,
+    #[lbs(id(2))]
+    en: Option<EnumOne>,
 }
 
 // Variant IDs are assigned implicitly, using their index
-#[derive(LBSWrite, LBSRead)]
-enum SomeEnum {
+#[derive(LBSWrite, LBSRead, PartialEq, Debug, Default)]
+enum EnumOne {
+    #[default]
+    #[lbs(id(0))]
     One,
+    #[lbs(id(1))]
     Two,
+    #[lbs(id(2))]
     Three(String),
+    #[lbs(id(3))]
+    Four(EnumTwo),
 }
 
-impl Default for SomeEnum {
-    fn default() -> Self {
-        SomeEnum::One
-    }
+#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
+enum EnumTwo {
+    #[lbs(id(0))]
+    One,
+    #[lbs(id(1))]
+    Two,
+}
+
+#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
+struct MessageV1 {
+    #[lbs(id(0))]
+    f0: u64,
+    #[lbs(id(1))]
+    f1: Option<u64>,
+}
+
+#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
+struct MessageV2 {
+    #[lbs(id(0))]
+    f0: u64,
+    #[lbs(id(1))]
+    f1: Option<u64>,
+    #[lbs(id(2))]
+    f2: u64,
 }
 
 #[test]
 fn usage() {
-    let mut original = SomeStruct {
-        f0: 0,
+    let mut original = StructOne {
+        f0: 1,
         f1: 1,
         f2: 2,
         f3: 3,
         f4: 4,
         f5: 5,
-        f6: 0,
+        f6: 1,
         f7: -1,
         f8: -2,
         f9: -3,
-        f10: 0.0,
-        f11: -3.14,
-        f12: (),
-        f13: true,
-        f14: 'a',
-        f15: String::from("test"),
-        f16: Duration::from_millis(1000),
-        f17: SystemTime::now(),
-        f18: Ipv4Addr::new(192, 168, 1, 2),
-        f19: Ipv6Addr::from_str("2001:0db8:85a3:0000:0000:8a2e:0370:7334").unwrap(),
-        f20: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        f21: Range { start: 0, end: 1 },
-        f22: Box::new(vec![1, 2, 3]),
-        f23: Rc::new(String::from("test_rc")),
-        f24: Arc::new(String::from("test_arc")),
-        f25: Arc::from("test_str_arc"),
-        f26: Cow::Owned(String::from("test_cow")),
-        f27: None,
-        f28: Vec::new(),
-        f29: HashMap::new(),
-        f30: BTreeMap::new(),
-        f31: HashSet::new(),
-        f32: BTreeSet::new(),
-        f33: chrono::Utc::now(),
-        f34: smallvec::smallvec![0, 1],
-        f35: AnotherStruct::default(),
-        f36: SomeEnum::Three(String::from("test_enum")),
-        f37: true,
+        f10: 23,
+        f11: 1,
+        f12: 1.1,
+        f13: -3.14,
+        f14: (),
+        f15: (1, String::from("1")),
+        f16: (1, 2, 3),
+        f17: true,
+        f18: 'a',
+        f19: String::from("test"),
+        f20: Duration::from_millis(1000),
+        f21: SystemTime::now(),
+        f22: Ipv4Addr::new(192, 168, 1, 2),
+        f23: Ipv6Addr::from_str("2001:0db8:85a3:0000:0000:8a2e:0370:7334").unwrap(),
+        f24: IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+        f25: Range { start: 0, end: 1 },
+        f26: vec![1, 2, 3],
+        f27: Rc::new(String::from("test_rc")),
+        f28: Arc::new(String::from("test_arc")),
+        f29: Arc::from("test_str_arc"),
+        f30: Cow::Owned(String::from("test_cow")),
+        f31: Some("str".to_string()),
+        f32: Vec::new(),
+        f33: HashMap::new(),
+        f34: BTreeMap::new(),
+        f35: HashSet::new(),
+        f36: BTreeSet::new(),
+        f37: chrono::Utc::now(),
+        f38: smallvec::smallvec![0, 1],
+        f39: StructTwo::default(),
+        f40: EnumOne::Three(String::from("test_enum")),
+        f41: IpNet::from_str("192.168.1.0/24").unwrap(),
+        f42: Uuid::new_v4(),
+        f43: OffsetDateTime::now_utc(),
+        f44: true,
     };
 
-    original.f29.insert(String::from("key1"), 1);
-    original.f29.insert(String::from("key2"), 2);
+    original.f33.insert(String::from("key1"), 1);
+    original.f33.insert(String::from("key2"), 2);
 
-    original.f30.insert(1, String::from("key1"));
-    original.f30.insert(2, String::from("key2"));
+    original.f34.insert(1, String::from("key1"));
+    original.f34.insert(2, String::from("key2"));
 
-    original.f31.insert(String::from("key1"));
-    original.f31.insert(String::from("key2"));
+    original.f35.insert(String::from("key1"));
+    original.f35.insert(String::from("key2"));
 
-    original.f32.insert(1);
-    original.f32.insert(1);
+    original.f36.insert(1);
+    original.f36.insert(1);
 
-    // Serialize
     let mut buf = Vec::with_capacity(128);
     original.lbs_write(&mut buf).unwrap();
 
-    // Deserialize
-    let decoded = SomeStruct::lbs_read(&mut buf.as_slice()).unwrap();
-
+    let decoded = StructOne::lbs_read(&mut buf.as_slice()).unwrap();
     assert_eq!(decoded.f0, original.f0);
     assert_eq!(decoded.f1, original.f1);
     assert_eq!(decoded.f2, original.f2);
@@ -293,49 +293,35 @@ fn usage() {
     assert_eq!(decoded.f32, original.f32);
     assert_eq!(decoded.f33, original.f33);
     assert_eq!(decoded.f34, original.f34);
-    assert_eq!(decoded.f35.id, original.f35.id);
-    assert_eq!(decoded.f35.done, original.f35.done);
-
-    if let SomeEnum::Three(s) = decoded.f36 {
-        assert_eq!(s, "test_enum")
-    } else {
-        panic!("not SomeEnum::Three")
-    }
-
-    assert_eq!(decoded.f37, false);
+    assert_eq!(decoded.f35, original.f35);
+    assert_eq!(decoded.f36, original.f36);
+    assert_eq!(decoded.f37, original.f37);
+    assert_eq!(decoded.f38, original.f38);
+    assert_eq!(decoded.f39, original.f39);
+    assert_eq!(decoded.f40, original.f40);
+    assert_eq!(decoded.f41, original.f41);
+    assert_eq!(decoded.f42, original.f42);
+    assert_eq!(decoded.f43, original.f43);
+    assert_eq!(decoded.f44, false);
 }
 
 #[test]
-fn usage_batch() {
-    let o1 = AnotherStruct {
-        id: "1".to_string(),
-        done: false,
-    };
+fn required() {
+    let msgv1 = MessageV1 { f0: 1, f1: None };
 
-    let o2 = AnotherStruct {
-        id: "2".to_string(),
-        done: true,
-    };
+    let mut buf = Vec::with_capacity(128);
+    msgv1.lbs_write(&mut buf).unwrap();
 
-    // Serialize batch
-    let batch = BytesMut::new();
-    let mut w = batch.writer();
-    o1.lbs_write(&mut w).unwrap();
-    o2.lbs_write(&mut w).unwrap();
-
-    // Deserialize batch
-    let batch = w.into_inner();
-    let mut r = batch.reader();
-    let mut decoded = Vec::new();
-
-    while r.get_ref().has_remaining() {
-        decoded.push(AnotherStruct::lbs_read(&mut r).unwrap());
+    if let Err(e) = MessageV2::lbs_read(&mut buf.as_slice()) {
+        if let LBSError::WithField(id, inner) = e {
+            if let LBSError::RequiredButMissing = inner.as_ref() {
+                if id == 2 {
+                    return;
+                }
+            }
+        }
     }
 
-    assert_eq!(decoded.len(), 2);
-    assert_eq!(decoded[0].id, o1.id);
-    assert_eq!(decoded[0].done, o1.done);
-    assert_eq!(decoded[1].id, o2.id);
-    assert_eq!(decoded[1].done, o2.done);
+    panic!("not an error");
 }
 ```
