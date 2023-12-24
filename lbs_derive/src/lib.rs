@@ -30,6 +30,7 @@ const ATTRIBUTE: &str = "lbs";
 const ARGUMENT_ID: &str = "id";
 const ARGUMENT_DEFAULT: &str = "default";
 const ARGUMENT_SKIP: &str = "skip";
+const ARGUMENT_OPTIONAL: &str = "optional";
 
 //
 // Types.
@@ -64,6 +65,8 @@ impl Meta {
             variant_fields: None,
         };
 
+        let mut optional = false;
+
         field
             .attrs
             .iter()
@@ -84,6 +87,9 @@ impl Meta {
                             meta.default = Some(Self::parse_default(content));
                         }
                         ARGUMENT_SKIP => meta.skip = Self::parse_flag(arg.input, ARGUMENT_SKIP),
+                        ARGUMENT_OPTIONAL => {
+                            optional = Self::parse_flag(arg.input, ARGUMENT_OPTIONAL)
+                        }
                         unknown => panic_unknown_argument(unknown),
                     }
 
@@ -94,7 +100,7 @@ impl Meta {
         let field_type = field.ty.to_token_stream().to_string();
 
         meta.required = !meta.skip
-            && meta.default.is_none()
+            && !optional
             && !field_type.starts_with("Option <")
             && !field_type.starts_with("core :: option :: Option <")
             && !field_type.starts_with(":: core :: option :: Option <");

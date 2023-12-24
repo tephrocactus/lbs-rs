@@ -153,24 +153,6 @@ enum EnumTwo {
     Two,
 }
 
-#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
-struct MessageV1 {
-    #[lbs(id(0))]
-    f0: u64,
-    #[lbs(id(1))]
-    f1: Option<u64>,
-}
-
-#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
-struct MessageV2 {
-    #[lbs(id(0))]
-    f0: u64,
-    #[lbs(id(1))]
-    f1: Option<u64>,
-    #[lbs(id(2))]
-    f2: u64,
-}
-
 #[test]
 fn usage() {
     let mut original = StructOne {
@@ -284,6 +266,24 @@ fn usage() {
     assert_eq!(decoded.f44, false);
 }
 
+#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
+struct MessageV1 {
+    #[lbs(id(0))]
+    f0: u64,
+    #[lbs(id(1))]
+    f1: Option<u64>,
+}
+
+#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
+struct MessageV2 {
+    #[lbs(id(0))]
+    f0: u64,
+    #[lbs(id(1))]
+    f1: Option<u64>,
+    #[lbs(id(2))]
+    f2: u64,
+}
+
 #[test]
 fn required() {
     let msgv1 = MessageV1 { f0: 1, f1: None };
@@ -302,4 +302,30 @@ fn required() {
     }
 
     panic!("not an error");
+}
+
+#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
+struct OtherMessageV1 {
+    #[lbs(id(0))]
+    f0: u64,
+    #[lbs(id(1))]
+    f1: Option<u64>,
+}
+
+#[derive(LBSWrite, LBSRead, PartialEq, Debug)]
+struct OtherMessageV2 {
+    #[lbs(id(0))]
+    f0: u64,
+    #[lbs(id(1))]
+    f1: Option<u64>,
+    #[lbs(id(2), optional)]
+    f2: u64,
+}
+
+#[test]
+fn optional() {
+    let msgv1 = OtherMessageV1 { f0: 1, f1: None };
+    let mut buf = Vec::with_capacity(128);
+    msgv1.lbs_write(&mut buf).unwrap();
+    OtherMessageV2::lbs_read(&mut buf.as_slice()).unwrap();
 }
