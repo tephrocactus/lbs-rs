@@ -1,13 +1,21 @@
 [package]
 name = "test"
-version = "0.3.0"
-authors = ["Roman Kuzmin <tephro@gmail.com>"]
+version = "0.3.1"
+authors = ["Roman Kuzmin <me@tephro.ru>"]
 edition = "2021"
 publish = false
 
 [dependencies]
 bytes = "1"
 chrono = "0.4"
-smallvec = "1.6.1"
-ipnet = "2.3.0"
-lbs = { path = "../lbs", features = ["chrono", "smallvec", "ipnet"] }
+smallvec = "1.6"
+ipnet = "2.3"
+time = "0.3"
+uuid = { version = "1.6", features = ["v4"] }
+lbs = { path = "../lbs", features = [
+    "chrono",
+    "smallvec",
+    "ipnet",
+    "uuid",
+    "time",
+] }

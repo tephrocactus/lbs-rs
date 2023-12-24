@@ -1,2 +1,3 @@
 [workspace]
 members = ["lbs", "lbs_derive", "test"]
+resolver = "2"

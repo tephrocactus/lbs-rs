@@ -29,7 +29,6 @@ use syn::Variant;
 const ATTRIBUTE: &str = "lbs";
 const ARGUMENT_ID: &str = "id";
 const ARGUMENT_DEFAULT: &str = "default";
-const ARGUMENT_REQUIRED: &str = "required";
 const ARGUMENT_SKIP: &str = "skip";
 
 //
@@ -38,7 +37,7 @@ const ARGUMENT_SKIP: &str = "skip";
 
 struct Meta {
     id: Option<u16>,
-    name: Option<syn::Ident>,
+    name: syn::Ident,
     default: Option<TokenStream>,
     variant_fields: Option<Fields>,
     required: bool,
@@ -54,7 +53,10 @@ impl Meta {
     fn from_struct_field(field: &Field) -> Self {
         let mut meta = Meta {
             id: None,
-            name: field.ident.clone(),
+            name: field
+                .ident
+                .clone()
+                .expect("unnamed fields are not supported"),
             span: field.span(),
             required: false,
             skip: false,
@@ -81,7 +83,6 @@ impl Meta {
                             parenthesized!(content in arg.input);
                             meta.default = Some(Self::parse_default(content));
                         }
-                        ARGUMENT_REQUIRED => meta.required = Self::parse_flag(arg.input, ARGUMENT_REQUIRED),
                         ARGUMENT_SKIP => meta.skip = Self::parse_flag(arg.input, ARGUMENT_SKIP),
                         unknown => panic_unknown_argument(unknown),
                     }
@@ -90,15 +91,23 @@ impl Meta {
                 })
             });
 
+        let field_type = field.ty.to_token_stream().to_string();
+
+        meta.required = !meta.skip
+            && meta.default.is_none()
+            && !field_type.starts_with("Option <")
+            && !field_type.starts_with("core :: option :: Option <")
+            && !field_type.starts_with(":: core :: option :: Option <");
+
         meta.validated()
     }
 
     fn from_enum_variant(variant: &Variant) -> Self {
         let mut meta = Meta {
             id: None,
-            name: Some(variant.ident.clone()),
+            name: variant.ident.clone(),
             span: variant.span(),
-            required: false,
+            required: true,
             skip: false,
             default: None,
             variant_fields: if variant.fields.is_empty() {
@@ -163,16 +172,6 @@ impl Meta {
             )
         }
 
-        if self.required {
-            if self.default.is_some() {
-                panic!("required field cannot have 'default' argument");
-            }
-
-            if self.skip {
-                panic!("required field cannot have 'skip' argument");
-            }
-        }
-
         self
     }
 }
@@ -180,8 +179,6 @@ impl Meta {
 //
 // Derive LBSWrite.
 //
-
-struct Tt(u32, u32);
 
 #[proc_macro_derive(LBSWrite, attributes(lbs))]
 pub fn derive_lbs_write(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -196,10 +193,10 @@ pub fn derive_lbs_write(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     // Generate lbs_write() body
     let write_body = match input.data {
         Data::Enum(ref data) => generate_write_body_for_enum(data),
-        Data::Union(_) => panic!("unions are unsupported yet"),
+        Data::Union(_) => panic!("unions are unsupported"),
         Data::Struct(ref data) => match data.fields {
             Fields::Named(ref fields) => generate_write_body_for_struct(fields),
-            Fields::Unnamed(_) => panic!("structs with unnamed fields are unsupported yet"),
+            Fields::Unnamed(_) => panic!("structs with unnamed fields are unsupported"),
             Fields::Unit => quote!(Ok(())),
         },
     };
@@ -208,13 +205,8 @@ pub fn derive_lbs_write(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     proc_macro::TokenStream::from(quote! {
         impl #impl_generics lbs::LBSWrite for #name #ty_generics #where_clause {
             #[inline]
-            fn lbs_write<W: std::io::Write>(&self, w: &mut W) -> std::io::Result<()> {
+            fn lbs_write<W: std::io::Write>(&self, w: &mut W) -> core::result::Result<(), lbs::error::LBSError> {
                 #write_body
-            }
-
-            #[inline]
-            fn lbs_is_default(&self) -> bool {
-                false
             }
         }
     })
@@ -249,7 +241,7 @@ pub fn derive_lbs_read(input: proc_macro::TokenStream) -> proc_macro::TokenStrea
     proc_macro::TokenStream::from(quote! {
         impl #impl_generics lbs::LBSRead for #name #ty_generics #where_clause {
             #[inline]
-            fn lbs_read<R: std::io::Read>(r: &mut R) -> std::io::Result<Self> {
+            fn lbs_read<R: std::io::Read>(r: &mut R) -> core::result::Result<Self, lbs::error::LBSError> {
                 #read_body
             }
         }
@@ -264,7 +256,7 @@ fn generate_write_body_for_struct(fields: &FieldsNamed) -> TokenStream {
     let field_count_expressions = meta.iter().filter(|m| !m.skip).map(|m| {
         let field_name = &m.name;
         quote_spanned! {m.span=>
-            if !self.#field_name.lbs_is_default() {
+            if self.#field_name.lbs_must_write() {
                 field_count += 1;
             }
         }
@@ -275,7 +267,7 @@ fn generate_write_body_for_struct(fields: &FieldsNamed) -> TokenStream {
         let field_id = m.id;
         let field_name = &m.name;
         quote_spanned! {m.span=>
-            if !self.#field_name.lbs_is_default() {
+            if self.#field_name.lbs_must_write() {
                 lbs::write::write_field_id(w, #field_id)?;
                 self.#field_name.lbs_write(w)?;
             }
@@ -307,7 +299,7 @@ fn generate_write_body_for_enum(data: &DataEnum) -> TokenStream {
         let variant_id = m.id;
         let variant_name = &m.name;
 
-        if let Some(_) = m.variant_fields {
+        if m.variant_fields.is_some() {
             return quote_spanned! {m.span=>
                 Self::#variant_name(inner) => {
                     lbs::write::write_field_id(w, #variant_id)?;
@@ -331,10 +323,10 @@ fn generate_write_body_for_enum(data: &DataEnum) -> TokenStream {
 }
 
 fn generate_read_body_for_struct(fields: &FieldsNamed) -> TokenStream {
-    // Gather meta
+    // Gather meta.
     let meta = gather_struct_meta(fields);
 
-    // Field initialization expressions
+    // Field initialization expressions.
     let field_init_expressions = meta.iter().map(|f| {
         let field_name = &f.name;
         match f.default {
@@ -347,20 +339,57 @@ fn generate_read_body_for_struct(fields: &FieldsNamed) -> TokenStream {
         }
     });
 
-    // Read expressions
+    // Required fields stuff.
+    let required_count = meta.iter().filter(|f| f.required).count();
+    let mut required_index_read = 0usize;
+    let mut required_index_check = 0usize;
+
+    // Read expressions.
     let read_expressions = meta.iter().filter(|f| !f.skip).map(|f| {
         let field_id = f.id;
         let field_name = &f.name;
-        quote_spanned! {f.span=>
-            #field_id => _self.#field_name = lbs::read::read(r)?,
+
+        let expr = if f.required {
+            quote_spanned! {f.span=>
+                #field_id => {
+                    _self.#field_name = lbs::read::read(r).map_err(|e| e.with_field(#field_id))?;
+                    required_present[#required_index_read] = true;
+                }
+            }
+        } else {
+            quote_spanned! {f.span=>
+                #field_id => _self.#field_name = lbs::read::read(r).map_err(|e| e.with_field(#field_id))?,
+            }
+        };
+
+        if f.required {
+            required_index_read += 1;
         }
+
+        expr
     });
 
-    // Complete body of lbs_read()
+    // Required check expressions.
+    let required_check_expressions = meta.iter().filter(|f| f.required).map(|f| {
+        let field_id = f.id;
+
+        let expr = quote_spanned! {f.span=>
+            if !required_present[#required_index_check] {
+                return Err(lbs::error::LBSError::RequiredButMissing.with_field(#field_id));
+            }
+        };
+
+        required_index_check += 1;
+        expr
+    });
+
+    // Complete body of lbs_read().
     quote! {
         let mut _self = Self {
             #(#field_init_expressions)*
         };
+
+        let mut required_present = [false; #required_count];
 
         for _ in 0..lbs::read::read_field_count(r)? {
             match lbs::read::read_field_id(r)? {
@@ -368,6 +397,8 @@ fn generate_read_body_for_struct(fields: &FieldsNamed) -> TokenStream {
                 _ => {},
             }
         }
+
+        #(#required_check_expressions)*
 
         Ok(_self)
     }
@@ -382,7 +413,7 @@ fn generate_read_body_for_enum(data: &DataEnum) -> TokenStream {
         let variant_id = m.id;
         let variant_name = &m.name;
 
-        if let Some(_) = m.variant_fields {
+        if m.variant_fields.is_some() {
             return quote_spanned! {m.span=>
                 #variant_id => Ok(Self::#variant_name(lbs::read::read(r)?)),
             };
@@ -397,7 +428,7 @@ fn generate_read_body_for_enum(data: &DataEnum) -> TokenStream {
     quote! {
         match lbs::read::read_field_id(r)? {
             #(#read_expressions)*
-            _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "unknown enum variant"))
+            _ => Err(lbs::error::LBSError::UnexpectedVariant)
         }
     }
 }

@@ -13,9 +13,12 @@ categories = ["encoding"]
 
 [dependencies]
 lbs_derive = { version = "0.3.1", path = "../lbs_derive" }
+thiserror = "1.0"
 chrono = { version = "0.4", optional = true }
 smallvec = { version = "1.11", optional = true }
 ipnet = { version = "2.3", optional = true }
+uuid = { version = "1.6", optional = true }
+time = { version = "0.3", optional = true }
 
 [features]
 default = []
