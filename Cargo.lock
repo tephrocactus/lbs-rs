@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "lbs"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "chrono",
  "ipnet",
@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "lbs_derive"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -240,7 +240,7 @@ dependencies = [
 
 [[package]]
 name = "test"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bytes",
  "chrono",
