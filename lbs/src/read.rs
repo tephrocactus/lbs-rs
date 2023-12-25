@@ -191,6 +191,17 @@ impl<'a, T: LBSRead + ToOwned> LBSRead for Cow<'a, T> {
     }
 }
 
+impl<'a, T> LBSRead for Cow<'a, [T]>
+where
+    T: LBSRead,
+    [T]: ToOwned<Owned = Vec<T>>,
+{
+    #[inline]
+    fn lbs_read<R: Read>(r: &mut R) -> Result<Self, LBSError> {
+        Ok(Self::Owned(<Vec<T> as LBSRead>::lbs_read(r)?))
+    }
+}
+
 impl<'a> LBSRead for Cow<'a, str> {
     #[inline]
     fn lbs_read<R: Read>(r: &mut R) -> Result<Self, LBSError> {

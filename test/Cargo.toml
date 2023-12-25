@@ -1,6 +1,6 @@
 [package]
 name = "test"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Roman Kuzmin <me@tephro.ru>"]
 edition = "2021"
 publish = false
@@ -11,6 +11,7 @@ chrono = "0.4"
 smallvec = "1.6"
 ipnet = "2.3"
 time = "0.3"
+fraction = "0.14"
 uuid = { version = "1.6", features = ["v4"] }
 lbs = { path = "../lbs", features = [
     "chrono",
@@ -18,4 +19,5 @@ lbs = { path = "../lbs", features = [
     "ipnet",
     "uuid",
     "time",
+    "fraction",
 ] }

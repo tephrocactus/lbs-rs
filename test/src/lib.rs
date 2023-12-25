@@ -5,6 +5,8 @@ use bytes::BufMut;
 use bytes::Bytes;
 use bytes::BytesMut;
 use chrono::NaiveDate;
+use fraction::Decimal;
+use fraction::Fraction;
 use ipnet::IpNet;
 use lbs::error::LBSError;
 use lbs::LBSRead;
@@ -118,6 +120,12 @@ struct StructOne<'a> {
     f43: OffsetDateTime,
     #[lbs(id(44), skip)]
     f44: bool,
+    #[lbs(id(45))]
+    f45: Fraction,
+    #[lbs(id(46))]
+    f46: Decimal,
+    #[lbs(id(47))]
+    f47: Cow<'a, [String]>,
 }
 
 // Field IDs are assigned implicitly, using their index
@@ -201,6 +209,9 @@ fn usage() {
         f42: Uuid::new_v4(),
         f43: OffsetDateTime::now_utc(),
         f44: true,
+        f45: Fraction::from(3.14),
+        f46: Decimal::from(3.15),
+        f47: vec!["a".to_string(), "b".to_string(), "c".to_string()].into(),
     };
 
     original.f33.insert(String::from("key1"), 1);
@@ -264,6 +275,9 @@ fn usage() {
     assert_eq!(decoded.f42, original.f42);
     assert_eq!(decoded.f43, original.f43);
     assert_eq!(decoded.f44, false);
+    assert_eq!(decoded.f45, original.f45);
+    assert_eq!(decoded.f46, original.f46);
+    assert_eq!(decoded.f47, original.f47);
 }
 
 #[derive(LBSWrite, LBSRead, PartialEq, Debug)]

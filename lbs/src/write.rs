@@ -172,28 +172,28 @@ impl<T: LBSWrite + PartialOrd> LBSWrite for Range<T> {
 impl<T: LBSWrite> LBSWrite for Box<T> {
     #[inline]
     fn lbs_write<W: Write>(&self, w: &mut W) -> Result<(), LBSError> {
-        (**self).lbs_write(w)
+        self.as_ref().lbs_write(w)
     }
 }
 
 impl<T: LBSWrite> LBSWrite for Rc<T> {
     #[inline]
     fn lbs_write<W: Write>(&self, w: &mut W) -> Result<(), LBSError> {
-        (**self).lbs_write(w)
+        self.as_ref().lbs_write(w)
     }
 }
 
 impl<T: LBSWrite> LBSWrite for Arc<T> {
     #[inline]
     fn lbs_write<W: Write>(&self, w: &mut W) -> Result<(), LBSError> {
-        (**self).lbs_write(w)
+        self.as_ref().lbs_write(w)
     }
 }
 
-impl<'a, T: LBSWrite + ToOwned> LBSWrite for Cow<'a, T> {
+impl<'a, T: LBSWrite + ToOwned + ?Sized> LBSWrite for Cow<'a, T> {
     #[inline]
     fn lbs_write<W: Write>(&self, w: &mut W) -> Result<(), LBSError> {
-        (**self).lbs_write(w)
+        self.as_ref().lbs_write(w)
     }
 }
 
@@ -214,7 +214,7 @@ impl<T: LBSWrite> LBSWrite for Option<T> {
     }
 }
 
-impl<T: LBSWrite> LBSWrite for Vec<T> {
+impl<T: LBSWrite> LBSWrite for [T] {
     #[inline]
     fn lbs_write<W: Write>(&self, w: &mut W) -> Result<(), LBSError> {
         write_len(w, self.len())?;
@@ -222,6 +222,13 @@ impl<T: LBSWrite> LBSWrite for Vec<T> {
             e.lbs_write(w)?;
         }
         Ok(())
+    }
+}
+
+impl<T: LBSWrite> LBSWrite for Vec<T> {
+    #[inline]
+    fn lbs_write<W: Write>(&self, w: &mut W) -> Result<(), LBSError> {
+        self.as_slice().lbs_write(w)
     }
 }
 

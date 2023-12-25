@@ -20,3 +20,6 @@ mod uuid;
 
 #[cfg(feature = "time")]
 mod time;
+
+#[cfg(feature = "fraction")]
+mod fraction;
