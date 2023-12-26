@@ -23,3 +23,6 @@ mod time;
 
 #[cfg(feature = "fraction")]
 mod fraction;
+
+#[cfg(feature = "ordered-float")]
+mod ordered_float;

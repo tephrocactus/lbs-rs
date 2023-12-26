@@ -11,6 +11,7 @@ use ipnet::IpNet;
 use lbs::error::LBSError;
 use lbs::LBSRead;
 use lbs::LBSWrite;
+use ordered_float::OrderedFloat;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -126,6 +127,8 @@ struct StructOne<'a> {
     f46: Decimal,
     #[lbs(id(47))]
     f47: Cow<'a, [String]>,
+    #[lbs(id(48))]
+    f48: OrderedFloat<f32>,
 }
 
 // Field IDs are assigned implicitly, using their index
@@ -212,6 +215,7 @@ fn usage() {
         f45: Fraction::from(3.14),
         f46: Decimal::from(3.15),
         f47: vec!["a".to_string(), "b".to_string(), "c".to_string()].into(),
+        f48: OrderedFloat(3.14),
     };
 
     original.f33.insert(String::from("key1"), 1);
@@ -278,6 +282,7 @@ fn usage() {
     assert_eq!(decoded.f45, original.f45);
     assert_eq!(decoded.f46, original.f46);
     assert_eq!(decoded.f47, original.f47);
+    assert_eq!(decoded.f48, original.f48);
 }
 
 #[derive(LBSWrite, LBSRead, PartialEq, Debug)]

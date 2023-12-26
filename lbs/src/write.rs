@@ -232,7 +232,7 @@ impl<T: LBSWrite> LBSWrite for Vec<T> {
     }
 }
 
-impl<K: LBSWrite, V: LBSWrite> LBSWrite for HashMap<K, V> {
+impl<K: LBSWrite, V: LBSWrite, S> LBSWrite for HashMap<K, V, S> {
     #[inline]
     fn lbs_write<W: Write>(&self, w: &mut W) -> Result<(), LBSError> {
         write_len(w, self.len())?;
@@ -244,7 +244,7 @@ impl<K: LBSWrite, V: LBSWrite> LBSWrite for HashMap<K, V> {
     }
 }
 
-impl<T: LBSWrite> LBSWrite for HashSet<T> {
+impl<T: LBSWrite, S> LBSWrite for HashSet<T, S> {
     #[inline]
     fn lbs_write<W: Write>(&self, w: &mut W) -> Result<(), LBSError> {
         write_len(w, self.len())?;
