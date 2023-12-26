@@ -11,7 +11,7 @@ No unsafe code.
 API or format changes may be introduced until v1.0.0.
 
 ## Usage
-1. Add `lbs = { version = "0.4.3", features = ["chrono", "smallvec", "ipnet", "uuid", "time", "fraction"] }` to `Cargo.toml`. Remove features you don't need.
+1. Add `lbs = { version = "0.4.3", features = ["chrono", "smallvec", "ipnet", "uuid", "time", "fraction", "ordered-float"] }` to `Cargo.toml`. Remove features you don't need.
 2. There are `LBSWrite` and `LBSRead` traits which implementations can be derived for structs and enums with `#[derive(LBSWrite, LBSRead)]`.
 3. Each field or variant must have an attribute `#[lbs(id(<u16>))]`. This allows to change order of fields anytime and makes serialization cheaper.
 4. If field is of type `Option<T>` and it's value is `None`, it is not serialized/deserialized, at all. Otherwise such a field is required unless it has explicit `#[lbs(optional)]` attribute.
